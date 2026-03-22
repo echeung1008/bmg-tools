@@ -80,10 +80,10 @@ namespace BlueMuffinGames.Tools.StateMachine
                 state.Initialize(this);
             }
 
+            _initialized = true;
+
             if (_stateRegistry.Count > 0) ChangeState(_stateRegistry.Values.ToList()[Mathf.Min(StateRegistry.Count - 1, _initialStateIndex)]);
             else LogWarning($"No registered states to change to.");
-
-            _initialized = true;
         }
 
         protected virtual void Update()
