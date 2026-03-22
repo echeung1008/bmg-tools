@@ -20,6 +20,8 @@ namespace BlueMuffinGames.Tools.StateMachine
         public event Action<State> OnStateExited = delegate { };
         public event Action<State> OnStateEntered = delegate { };
 
+        private bool _initialized = false;
+
         public virtual void ChangeState(string stateName)
         {
             if (_stateRegistry.TryGetValue(stateName, out State state))
@@ -31,6 +33,8 @@ namespace BlueMuffinGames.Tools.StateMachine
 
         public virtual void ChangeState(State state)
         {
+            EnsureInitialized();
+
             if (state == null) return;
             if (!_allowExternalStates && !_stateRegistry.Values.Contains(state)) { LogError($"Attempted to transition to {state.name} when external states aren't allowed in StateMachine {name}."); return; }
             if (state == CurrentState) return;
@@ -69,6 +73,8 @@ namespace BlueMuffinGames.Tools.StateMachine
 
         protected virtual void Start()
         {
+            if (_initialized) return;
+
             foreach (var state in StateRegistry.Values)
             {
                 state.Initialize(this);
@@ -76,6 +82,8 @@ namespace BlueMuffinGames.Tools.StateMachine
 
             if (_stateRegistry.Count > 0) ChangeState(_stateRegistry.Values.ToList()[Mathf.Min(StateRegistry.Count - 1, _initialStateIndex)]);
             else LogWarning($"No registered states to change to.");
+
+            _initialized = true;
         }
 
         protected virtual void Update()
@@ -90,6 +98,13 @@ namespace BlueMuffinGames.Tools.StateMachine
             if (CurrentState == null) return;
 
             CurrentState.StateFixedUpdate();
+        }
+
+        private void EnsureInitialized()
+        {
+            if (_initialized) return;
+
+            Start();
         }
 
         #region Debugging
