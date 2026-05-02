@@ -1,5 +1,7 @@
 using Newtonsoft.Json;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -14,7 +16,6 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
         public event Action RebindingStarted = delegate { };
         public event Action RebindingStopped = delegate { };
         public event Action<int> OverridesChanged = delegate { };
-        public event Action<int, InputAction> ActionRebinded = delegate { };
 
         protected InputRebinds _inputRebinds;
 
@@ -43,7 +44,9 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
 
             var cancelationInput = GetCancelationInput(bindingGroup);
 
+            inputAction.Disable();
             RebindingStarted?.Invoke();
+            
             inputAction.PerformInteractiveRebinding(bindingIndex)
                 .WithBindingGroup(bindingGroup)
                 .WithCancelingThrough(cancelationInput)
@@ -51,17 +54,22 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
                 .OnComplete(operation =>
                 {
                     RebindingStopped?.Invoke();
-
-                    ActionRebinded?.Invoke(playerInputIndex, inputAction);
-                    OverridesChanged?.Invoke(playerInputIndex);
+                    inputAction.Enable();
 
                     RecordAllActionOverrides();
+
+                    operation.Dispose();
                 })
                 
                 .OnCancel(operation => 
                 {
                     RebindingStopped?.Invoke();
-                });
+                    inputAction.Enable();
+
+                    operation.Dispose();
+                })
+                
+                .Start();
         }
 
         public virtual void RecordAllActionOverrides()
@@ -80,17 +88,17 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
                 return;
             }
 
-            foreach (var pair in _inputRebinds.rebinds)
+            foreach (var playerInput in GetAllPlayerInputs())
             {
-                if (!TryGetPlayerInputAtIndex(pair.Key, out var playerInput)) continue;
+                if (playerInput == null) continue;
 
-                _inputRebinds.rebinds[pair.Key] = playerInput.actions.SaveBindingOverridesAsJson();
+                _inputRebinds.rebinds[playerInput.playerIndex] = playerInput.actions.SaveBindingOverridesAsJson();
             }
 
             BaseSettingsManager.Instance.RecordChange(_inputRebindsSettingDefinitionId, JsonConvert.SerializeObject(_inputRebinds));
         }
 
-        public virtual void LoadAllActionOverrides()
+        public virtual void LoadAllActionOverrides(string inputRebindsJson = "")
         {
             if (BaseSettingsManager.Instance == null) return;
             if (string.IsNullOrEmpty(_inputRebindsSettingDefinitionId))
@@ -99,15 +107,25 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
                 return;
             }
 
-            string inputRebindsJson = string.Empty;
-            BaseSettingsManager.Instance.TryGetValue(_inputRebindsSettingDefinitionId, out inputRebindsJson);
+            if (string.IsNullOrEmpty(inputRebindsJson))
+            {
+                BaseSettingsManager.Instance.TryGetValue(_inputRebindsSettingDefinitionId, out inputRebindsJson, onlyApplied: false);
+            }
+            
+            Debug.Log($"Loaded input rebinds from json: {inputRebindsJson}");
             _inputRebinds = InputRebinds.Deserialize(inputRebindsJson);
 
-            foreach (var pair in _inputRebinds.rebinds)
-            {
-                if (!TryGetPlayerInputAtIndex(pair.Key, out var playerInput)) continue;
+            if (_inputRebinds == null) return;
 
-                playerInput.actions.LoadBindingOverridesFromJson(pair.Value);
+            foreach (var playerInput in GetAllPlayerInputs())
+            {
+                if (playerInput == null) continue;
+                var json = _inputRebinds.rebinds.TryGetValue(playerInput.playerIndex, out var cached) ? cached : string.Empty;
+
+                playerInput.actions.LoadBindingOverridesFromJson(json);
+                
+
+                OverridesChanged?.Invoke(playerInput.playerIndex);
             }
         }
 
@@ -121,16 +139,41 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
 
         }
 
-        protected virtual bool TryGetPlayerInputAtIndex(int playerIndexIndex, out PlayerInput playerInput)
+        public virtual string GetActionBindingDisplayString(int playerInputIndex, InputAction inputAction)
+        {
+            const string FAIL_MESSAGE = "ERROR";
+            if (!TryGetPlayerInputAtIndex(playerInputIndex, out var playerInput)) return FAIL_MESSAGE;
+
+            var action = playerInput.actions.FindAction(inputAction.id);
+            if (action == null) return FAIL_MESSAGE;
+
+            if (!TryFindBindingGroup(playerInput, out var bindingGroup)) return FAIL_MESSAGE;
+            if (!TryFindBindingIndex(action, bindingGroup, out var bindingIndex)) return FAIL_MESSAGE;
+
+            return action.bindings[bindingIndex].ToDisplayString();
+        }
+
+        protected virtual bool TryGetPlayerInputAtIndex(int playerInputIndex, out PlayerInput playerInput)
         {
             playerInput = null;
-            if (playerIndexIndex < 0) return false;
-            
-            var playerInputs = FindObjectsByType<PlayerInput>(FindObjectsSortMode.None);
-            if (playerInputs.Length == 0) return false;
+            if (playerInputIndex < 0) return false;
 
-            playerInput = playerInputs[Mathf.Clamp(playerIndexIndex, 0, playerInputs.Length - 1)];
-            return true;
+            var playerInputs = GetAllPlayerInputs();
+            foreach (var input in playerInputs)
+            {
+                if (input != null && input.playerIndex == playerInputIndex)
+                {
+                    playerInput = input;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        protected virtual List<PlayerInput> GetAllPlayerInputs()
+        {
+            return FindObjectsByType<PlayerInput>(FindObjectsSortMode.None).ToList();
         }
 
         protected virtual bool TryFindBindingGroup(PlayerInput playerInput, out string bindingGroup)
@@ -165,7 +208,9 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
 
                 if (!string.IsNullOrEmpty(bindingGroup))
                 {
-                    var groups = binding.groups ?? "";
+                    var groups = (binding.groups ?? "")
+                        .Split(';', StringSplitOptions.RemoveEmptyEntries);
+
                     if (!groups.Contains(bindingGroup)) continue;
                 }
 
@@ -195,6 +240,8 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
         protected virtual void Start()
         {
             LoadAllActionOverrides();
+
+            BaseSettingsManager.Instance.OnChangeRecorded += HandleChangeRecorded;
         }
 
         protected virtual void Awake()
@@ -212,6 +259,16 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
             {
                 Instance = null;
             }
+        }
+
+        private void HandleChangeRecorded(string id, object value)
+        {
+            if (_inputRebindsSettingDefinitionId != id) return;
+            Debug.Log($"(RebindingManager) HandleChangeRecorded({id}, {value})");
+
+            if (value is not string json) return;
+
+            LoadAllActionOverrides(json);
         }
     }
 }

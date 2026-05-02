@@ -2,7 +2,8 @@
     "name": "BMGTools.Editor",
     "rootNamespace": "BlueMuffinGames",
     "references": [
-        "BMGTools.Runtime"
+        "BMGTools.Runtime",
+        "Unity.InputSystem"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

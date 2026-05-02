@@ -46,12 +46,12 @@ namespace BlueMuffinGames.Tools.SettingsSystem
             value = default;
 
             // allow the change registry to return value if not onlyApplied
-            if (!onlyApplied && !_changeRegistry.TryGetValue(id, out value))
+            if (!onlyApplied && _changeRegistry.TryGetValue(id, out value))
             {
-                Debug.LogError($"(BaseSettingsManager) Change Registry does not contain the id {id}");
-                return false;
+                return true;
             }
-            else if (!_registeredValues.TryGetValue(id, out value))
+
+            if (!_registeredValues.TryGetValue(id, out value))
             {
                 Debug.LogError($"(BaseSettingsManager) Registry does not contain the id {id}");
                 return false;
