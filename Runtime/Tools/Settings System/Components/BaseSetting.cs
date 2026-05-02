@@ -10,7 +10,7 @@ namespace BlueMuffinGames.Tools.SettingsSystem
 
         public virtual void Initialize() { }
 
-        public virtual void ResetSetting()
+        public virtual void UpdateVisual()
         {
             if (BaseSettingsManager.Instance != null) BaseSettingsManager.Instance.ResetSetting(ID);
         }

@@ -1,3 +1,4 @@
+using UnityEditor.PackageManager;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -25,11 +26,12 @@ namespace BlueMuffinGames.Tools.SettingsSystem
             _slider.onValueChanged.AddListener(OnValueChanged);
         }
 
-        protected override void SetVisualValue(float value)
+        protected override void SetVisualValue(float value, bool silent = false)
         {
             if (_slider == null) return;
 
-            _slider.value = value;
+            if (silent) _slider.SetValueWithoutNotify(value);
+            else _slider.value = value;
         }
     }
 }

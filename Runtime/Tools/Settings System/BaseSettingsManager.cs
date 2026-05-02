@@ -1,3 +1,5 @@
+using BlueMuffinGames.Utility.SaveAndLoad;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -9,32 +11,25 @@ namespace BlueMuffinGames.Tools.SettingsSystem
 
         [SerializeField] protected SettingsRegistry _registry;
         [SerializeField] protected bool _debug;
+        [SerializeField] private GameObject _wrappedSaveAndLoad;
 
-        protected Dictionary<string, SettingGroup> _registeredSettingGroups = new();
-        protected Dictionary<string, SettingDefinition> _registeredSettingDefinitions = new();
+        public event Action<string, object> OnChangeRecorded = delegate { };
+
+        public bool HasUnsavedChanges => _changeRegistry != null ? _changeRegistry.Count > 0 : false;
+
+        protected Dictionary<string, BaseSettingDefinition> _registeredSettingDefinitions = new();
 
         protected Dictionary<string, object> _registeredValues = new();
         protected Dictionary<string, BaseSettingBehaviour> _registeredBehaviours = new();
         protected Dictionary<string, BaseOptionProvider> _registeredOptionProviders = new();
         protected Dictionary<string, object> _changeRegistry = new();
 
+        protected ISaveAndLoad _saveAndLoad;
+
         public virtual bool TryGetValue<T>(string id, out T value, bool onlyApplied = true)
         {
             value = default;
-
-            object uncastedValue = null;
-
-            // allow the change registry to return value if not onlyApplied
-            if (!onlyApplied && !_changeRegistry.TryGetValue(id, out uncastedValue))
-            {
-                Debug.LogError($"(BaseSettingsManager) Change Registry does not contain the id {id}");
-                return false;
-            }
-            else if (!_registeredValues.TryGetValue(id, out uncastedValue))
-            {
-                Debug.LogError($"(BaseSettingsManager) Registry does not contain the id {id}");
-                return false;
-            }
+            if (!TryGetValue(id, typeof(T), out var uncastedValue, onlyApplied)) return false;
 
             if (uncastedValue is not T castedValue)
             {
@@ -46,6 +41,25 @@ namespace BlueMuffinGames.Tools.SettingsSystem
             return true;
         }
 
+        public virtual bool TryGetValue(string id, Type type, out object value, bool onlyApplied = true)
+        {
+            value = default;
+
+            // allow the change registry to return value if not onlyApplied
+            if (!onlyApplied && !_changeRegistry.TryGetValue(id, out value))
+            {
+                Debug.LogError($"(BaseSettingsManager) Change Registry does not contain the id {id}");
+                return false;
+            }
+            else if (!_registeredValues.TryGetValue(id, out value))
+            {
+                Debug.LogError($"(BaseSettingsManager) Registry does not contain the id {id}");
+                return false;
+            }
+            
+            return true;
+        }
+
         public virtual void RecordChange(string id, object value)
         {
             _changeRegistry[id] = value;
@@ -54,9 +68,10 @@ namespace BlueMuffinGames.Tools.SettingsSystem
             {
                 behaviour.OnValueChanged(value);
             }
+
+            OnChangeRecorded?.Invoke(id, value);
         }
 
-        [ContextMenu("Apply Changes")]
         public virtual void PushAllChanges()
         {
             foreach (var pair in _changeRegistry)
@@ -72,12 +87,13 @@ namespace BlueMuffinGames.Tools.SettingsSystem
                 
                 // check if it was set back to the default value
                 if (_registeredSettingDefinitions.TryGetValue(pair.Key, out var definition) && 
-                    definition.TryGetDefaultValue(out var defaultValue) &&
-                    defaultValue.Equals(pair.Value)
+                    definition.DefaultValueObject.Equals(pair.Value)
                 )
                 {
                     var saveKey = GetSaveKey(pair.Key);
-                    if (PlayerPrefs.HasKey(saveKey)) PlayerPrefs.DeleteKey(saveKey);
+                    _saveAndLoad?.Delete(saveKey);
+
+                    if (_debug) Debug.Log($"Reset setting {pair.Key} to its default value.");
                 }
             }
         }
@@ -90,36 +106,24 @@ namespace BlueMuffinGames.Tools.SettingsSystem
                 return;
             }
 
-            if (definition.SettingType == SettingDefinition.Type.None) return;
-
-            if (!definition.TryGetDefaultValue(out var defaultValue))
-            {
-                Debug.LogError($"(BaseSettingsManager) Failed to parse setting definition's {definition.ID} default value to the setting's type {definition.SettingType}.");
-                return;
-            }
-
-            RecordChange(id, defaultValue);
+            RecordChange(id, definition.DefaultValueObject);
         }
 
         public virtual void ClearAllChanges()
         {
+            // reset changed values to the applied values
+            List<Action> pendingActions = new();
+            foreach (var pair in _changeRegistry)
+            {
+                if (!_registeredSettingDefinitions.TryGetValue(pair.Key, out var definition)) continue;
+                if (!TryGetValue(pair.Key, definition.ValueType, out var originalValue, onlyApplied: true)) continue;
+
+                pendingActions.Add(() => RecordChange(pair.Key, originalValue));
+            }
+
+            foreach (var action in pendingActions) action?.Invoke();
+
             _changeRegistry.Clear();
-        }
-
-        public virtual void ResetAllSettingsInGroup(string groupId, bool applyChanges = false)
-        {
-            if (!_registeredSettingGroups.TryGetValue(groupId, out var group))
-            {
-                Debug.LogError($"(BaseSettingsManager) Registered Groups does not contain a group with id {groupId}");
-                return;
-            }
-
-            foreach (var definition in group.Definitions)
-            {
-                ResetSetting(definition.ID);
-            }
-
-            if (applyChanges) PushAllChanges();
         }
 
         public virtual bool TryGetBehaviour(string id, out BaseSettingBehaviour behaviour)
@@ -150,6 +154,9 @@ namespace BlueMuffinGames.Tools.SettingsSystem
             {
                 Instance = this;
                 DontDestroyOnLoad(gameObject);
+
+                _saveAndLoad = _wrappedSaveAndLoad != null ? _wrappedSaveAndLoad.GetComponent<ISaveAndLoad>() : null;
+
                 RegisterSettings();
 
                 if (_debug) PrintRegisteredValues();
@@ -166,112 +173,85 @@ namespace BlueMuffinGames.Tools.SettingsSystem
             if (Instance == this) Instance = null;
         }
 
-        protected virtual bool TryGetSavedSetting(string id, SettingDefinition.Type type, out object value)
+        protected virtual bool TryLoadSetting(string id, Type type, out object value)
         {
             value = default;
             var key = GetSaveKey(id);
 
-            if (!PlayerPrefs.HasKey(key)) return false;
+            if (_saveAndLoad == null) return false;
 
-            switch (type)
-            {
-                case SettingDefinition.Type.Bool:
-                    var boolString = PlayerPrefs.GetString(key);
-                    if (bool.TryParse(boolString, out bool boolValue))
-                    {
-                        value = boolValue;
-                        return true;
-                    }
-                    return false;
-                case SettingDefinition.Type.Int:
-                    value = PlayerPrefs.GetInt(key);
-                    return true;
-                case SettingDefinition.Type.Float:
-                    value = PlayerPrefs.GetFloat(key);
-                    return true;
-                case SettingDefinition.Type.String:
-                    value = PlayerPrefs.GetString(key);
-                    return true;
-                default:
-                    return false;
-            }
+            return _saveAndLoad.TryLoad(key, type, out value);
         }
 
         protected virtual void SaveSetting<T>(string id, T value)
         {
             var key = GetSaveKey(id);
 
-            switch (value)
-            {
-                case int intValue:
-                    PlayerPrefs.SetInt(key, intValue);
-                    break;
-                case float floatValue:
-                    PlayerPrefs.SetFloat(key, floatValue);
-                    break;
-                default:
-                    PlayerPrefs.SetString(key, value.ToString());
-                    break;
-            }
+            _saveAndLoad?.Save(key, value);
+
+            if (_debug) Debug.Log($"Saved setting {id} with value {value?.ToString()}");
         }
 
         private void RegisterSettings()
         {
-            foreach (var group in _registry.Groups)
+            foreach (var definition in _registry.SettingDefinitions)
             {
-                if (_registeredSettingGroups.ContainsKey(group.ID))
+                if (_registeredSettingDefinitions.ContainsKey(definition.ID))
                 {
-                    Debug.LogWarning($"(BaseSettingsManager) A SettingGroup with ID {group.ID} has already been registered. Skipping...");
+                    Debug.LogWarning($"(BaseSettingsManager) A SettingDefinition with ID {definition.ID} has already been registered. Skipping...");
                     continue;
                 }
 
-                _registeredSettingGroups[group.ID] = group;
+                _registeredSettingDefinitions[definition.ID] = definition;
+                if (definition.Behaviour != null) _registeredBehaviours[definition.ID] = definition.Behaviour;
+                if (definition.OptionProvider != null) _registeredOptionProviders[definition.ID] = definition.OptionProvider;
 
-                foreach (var definition in group.Definitions)
-                {
-                    if (_registeredSettingDefinitions.ContainsKey(definition.ID))
-                    {
-                        Debug.LogWarning($"(BaseSettingsManager) A SettingDefinition with ID {definition.ID} has already been registered. Skipping...");
-                        continue;
-                    }
+                object initialValue = definition.DefaultValueObject;
+                if (TryLoadSetting(definition.ID, definition.ValueType, out object savedValue)) initialValue = savedValue;
 
-                    _registeredSettingDefinitions[definition.ID] = definition;
-                    if (definition.Behaviour != null) _registeredBehaviours[definition.ID] = definition.Behaviour;
-                    if (definition.OptionProvider != null) _registeredOptionProviders[definition.ID] = definition.OptionProvider;
-
-                    if (definition.TryGetDefaultValue(out var defaultValue))
-                    {
-                        object initialValue = defaultValue;
-                        if (TryGetSavedSetting(definition.ID, definition.SettingType, out object savedValue)) initialValue = savedValue;
-
-                        RecordChange(definition.ID, initialValue);
-                        if (_debug) Debug.Log($"(BaseSettingsManager) Registered setting {definition.ID} with initial value {initialValue}");
-                    }
-                    else
-                    {
-                        if (definition.SettingType != SettingDefinition.Type.None)
-                            Debug.LogError($"(BaseSettingsManager) Failed to parse setting definition's {definition.ID} default value to the setting's type {definition.SettingType}.");
-                    }
-                }
+                RecordChange(definition.ID, initialValue);
+                if (_debug) Debug.Log($"(BaseSettingsManager) Registered setting {definition.ID} with initial value {initialValue}");
             }
 
             PushAllChanges();
         }
 
-        protected virtual string GetSaveKey(string id) => $"Setting: {id}";
+        protected virtual string GetSaveKey(string id) => $"setting.{id}";
 
-        #region Debug
+
+        #if UNITY_EDITOR
         [ContextMenu("Print Registered Values")]
         private void PrintRegisteredValues()
         {
             string result = "Registered Setting Values:";
             foreach (var pair in _registeredValues)
             {
-                result += $"\n\t{pair.Key} => {pair.Value.ToString()}";
+                result += $"\n\t{pair.Key} => {pair.Value?.ToString()}";
             }
 
             Debug.Log(result);
         }
-        #endregion
+
+        [ContextMenu("Apply Changes")]
+        private void ApplyChanges()
+        {
+            PushAllChanges();
+        }
+
+        [ContextMenu("Clear Changes")]
+        private void ClearChanges()
+        {
+            ClearAllChanges();
+        }
+
+        [ContextMenu("Reset All Values")]
+        private void ResetAllValues()
+        {
+            foreach (var id in _registeredSettingDefinitions.Keys)
+            {
+                ResetSetting(id);
+            }
+        }
+        #endif
     }
 }

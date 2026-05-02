@@ -3,11 +3,16 @@ using UnityEngine;
 
 namespace BlueMuffinGames.Tools.SettingsSystem
 {
-    [CreateAssetMenu(fileName = "SettingsRegistry", menuName = "Scriptable Objects/SettingsRegistry")]
-    public class SettingsRegistry : ScriptableObject
+    [CreateAssetMenu(fileName = "SettingsRegistry", menuName = "Scriptable Objects/Settings System/SettingsRegistry")]
+    public class SettingsRegistry : BaseRegistry
     {
-        [SerializeField] private List<SettingGroup> _settings = new();
+        [SerializeField] private List<BaseSettingDefinition> _settingDefinitions = new();
 
-        public IReadOnlyList<SettingGroup> Groups => _settings;
+        public IReadOnlyList<BaseSettingDefinition> SettingDefinitions => _settingDefinitions;
+
+        protected override void ProcessFolders(string[] folderPaths)
+        {
+            _settingDefinitions = FindScriptableObjects<BaseSettingDefinition>(folderPaths);
+        }
     }
 }

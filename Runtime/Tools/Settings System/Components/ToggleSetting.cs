@@ -21,11 +21,12 @@ namespace BlueMuffinGames.Tools.SettingsSystem
             _toggle.onValueChanged.AddListener(OnValueChanged);
         }
 
-        protected override void SetVisualValue(bool value)
+        protected override void SetVisualValue(bool value, bool silent = false)
         {
             if (_toggle == null) return;
 
-            _toggle.isOn = value;
+            if (silent) _toggle.SetIsOnWithoutNotify(value);
+            else _toggle.isOn = value;
         }
     }
 }

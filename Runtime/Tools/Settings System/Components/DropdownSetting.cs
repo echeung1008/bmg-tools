@@ -54,7 +54,7 @@ namespace BlueMuffinGames.Tools.SettingsSystem
             _dropdown.onValueChanged.AddListener(HandleValueChanged);
         }
 
-        protected override void SetVisualValue(string optionId)
+        protected override void SetVisualValue(string optionId, bool silent = false)
         {
             if (_dropdown == null) return;
 
@@ -66,7 +66,8 @@ namespace BlueMuffinGames.Tools.SettingsSystem
                 return;
             }
 
-            _dropdown.value = index;
+            if (silent) _dropdown.SetValueWithoutNotify(index);
+            else _dropdown.value = index;
         }
 
         private int IndexOf(string optionId)

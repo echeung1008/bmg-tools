@@ -3,7 +3,6 @@ using UnityEngine;
 namespace BlueMuffinGames.Tools.SettingsSystem
 {
     public abstract class TypedSettingBehaviour<T> : BaseSettingBehaviour
-        where T : struct
     {
         public sealed override void OnValueChanged(object value)
         {

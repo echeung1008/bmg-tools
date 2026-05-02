@@ -22,18 +22,28 @@ namespace BlueMuffinGames.Tools.SettingsSystem
             }
 
             SetVisualValue(value);
+
+            BaseSettingsManager.Instance.OnChangeRecorded += HandleChangeRecorded;
         }
 
-        public override void ResetSetting()
+        private void HandleChangeRecorded(string id, object value)
         {
-            base.ResetSetting();
+            if (ID != id) return;
+            if (value is not T casted) return;
+
+            SetVisualValue(casted, silent: true);
+        }
+
+        public override void UpdateVisual()
+        {
+            base.UpdateVisual();
 
             // set visual to new value
             if (BaseSettingsManager.Instance != null && BaseSettingsManager.Instance.TryGetValue(ID, out T value, onlyApplied: false)) 
                 SetVisualValue(value); 
         }
 
-        protected abstract void SetVisualValue(T value);
+        protected abstract void SetVisualValue(T value, bool silent = false);
 
         protected virtual void OnValueChanged(T value)
         {

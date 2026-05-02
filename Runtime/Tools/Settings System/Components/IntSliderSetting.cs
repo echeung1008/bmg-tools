@@ -25,11 +25,12 @@ namespace BlueMuffinGames.Tools.SettingsSystem
             _slider.onValueChanged.AddListener(OnValueChangedFloat);
         }
 
-        protected override void SetVisualValue(int value)
+        protected override void SetVisualValue(int value, bool silent = false)
         {
             if (_slider == null) return;
 
-            _slider.value = value;
+            if (silent) _slider.SetValueWithoutNotify(value);
+            else _slider.value = value;
         }
 
         private void OnValueChangedFloat(float value)
