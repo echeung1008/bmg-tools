@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
 {
-    public class RebindingTabSpawner : MonoBehaviour
+    public class RebindingGroupSpawner : MonoBehaviour
     {
         [SerializeField] private GameObject _tabPrefab;
 
@@ -23,9 +23,13 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
 
             _rebindingTabRegistry[playerIndex] = newTab;
 
-            foreach (var rebindingComponent in newTab.GetComponentsInChildren<RebindingComponent>())
+            if (newTab.TryGetComponent(out RebindingGroup rebindingGroup)) rebindingGroup.SetPlayerInputIndex(playerIndex);
+            else
             {
-                rebindingComponent.SetPlayerInputIndex(playerIndex);
+                foreach (var rebindingComponent in newTab.GetComponentsInChildren<RebindingComponent>())
+                {
+                    rebindingComponent.SetPlayerInputIndex(playerIndex);
+                }
             }
         }
 

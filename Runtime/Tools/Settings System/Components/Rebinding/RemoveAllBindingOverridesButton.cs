@@ -3,7 +3,7 @@ using UnityEngine.UI;
 
 namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
 {
-    public class RemoveBindingOverrideButton : ActionRebindingComponent
+    public class RemoveAllBindingOverridesButton : RebindingComponent
     {
         [SerializeField] private Button _button;
 
@@ -21,9 +21,8 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
         {
             if (RebindingManager.Instance == null) return;
             if (PlayerInputIndex == -1) return;
-            if (TargetAction == null) return;
 
-            RebindingManager.Instance.RemoveBindingOverride(PlayerInputIndex, TargetAction);
+            RebindingManager.Instance.RemoveAllBindingOverrides(PlayerInputIndex);
         }
     }
 }

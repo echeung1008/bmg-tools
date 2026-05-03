@@ -5,7 +5,7 @@ using UnityEngine.UI;
 
 namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
 {
-    public class RebindActionButton : RebindingComponent
+    public class RebindActionButton : ActionRebindingComponent
     {
         [SerializeField] private Button _button;
         [SerializeField] private TMP_Text _display;
@@ -14,6 +14,7 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
         protected override void OnPlayerInputIndexChanged()
         {
             UpdateDisplay();
+            Debug.Log("UpdateDisplay Invoked");
         }
 
         protected virtual void UpdateLabel()

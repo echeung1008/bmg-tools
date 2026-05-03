@@ -13,9 +13,13 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
 
         public static RebindingManager Instance { get; private set; }
 
-        public event Action RebindingStarted = delegate { };
+        #region Events
+        public event Action<RebindingContext> RebindingStarted = delegate { };
         public event Action RebindingStopped = delegate { };
         public event Action<int> OverridesChanged = delegate { };
+
+        public void OnOverridesChanged(int playerInputIndex) => OverridesChanged?.Invoke(playerInputIndex);
+        #endregion
 
         protected InputRebinds _inputRebinds;
 
@@ -45,31 +49,93 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
             var cancelationInput = GetCancelationInput(bindingGroup);
 
             inputAction.Disable();
-            RebindingStarted?.Invoke();
             
-            inputAction.PerformInteractiveRebinding(bindingIndex)
-                .WithBindingGroup(bindingGroup)
-                .WithCancelingThrough(cancelationInput)
-                
-                .OnComplete(operation =>
-                {
-                    RebindingStopped?.Invoke();
-                    inputAction.Enable();
+            
+            if (!inputAction.bindings[bindingIndex].isPartOfComposite)
+            {
+                NonCompositeRebinding();
+            }
+            else
+            {
+                CompositeRebinding(bindingIndex);
+            }
 
-                    RecordAllActionOverrides();
+            void NonCompositeRebinding()
+            {
+                RebindingStarted?.Invoke(new RebindingContext(
+                    inputAction,
+                    bindingGroup,
+                    bindingIndex,
+                    GetActionLabel(inputAction),
+                    cancelationInput
+                ));
 
-                    operation.Dispose();
-                })
-                
-                .OnCancel(operation => 
-                {
-                    RebindingStopped?.Invoke();
-                    inputAction.Enable();
+                inputAction.PerformInteractiveRebinding(bindingIndex)
+                    .WithBindingGroup(bindingGroup)
+                    .WithCancelingThrough(cancelationInput)
 
-                    operation.Dispose();
-                })
-                
-                .Start();
+                    .OnComplete(operation =>
+                    {
+                        RebindingStopped?.Invoke();
+                        inputAction.Enable();
+
+                        RecordAllActionOverrides();
+
+                        operation.Dispose();
+                    })
+
+                    .OnCancel(operation =>
+                    {
+                        RebindingStopped?.Invoke();
+                        inputAction.Enable();
+
+                        operation.Dispose();
+                    })
+
+                    .Start();
+            }
+
+            void CompositeRebinding(int currentIndex)
+            {
+                RebindingStarted?.Invoke(new RebindingContext(
+                    inputAction,
+                    bindingGroup,
+                    bindingIndex,
+                    GetCompositeBindingLabel(inputAction, currentIndex),
+                    cancelationInput
+                ));
+
+                inputAction.PerformInteractiveRebinding(currentIndex)
+                    .WithBindingGroup(bindingGroup)
+                    .WithCancelingThrough(cancelationInput)
+
+                    .OnComplete(operation =>
+                    {
+                        operation.Dispose();
+
+                        int nextIndex = currentIndex + 1;
+                        if (nextIndex < inputAction.bindings.Count && inputAction.bindings[nextIndex].isPartOfComposite)
+                        {
+                            CompositeRebinding(nextIndex);
+                        }
+                        else
+                        {
+                            RebindingStopped?.Invoke();
+                            inputAction.Enable();
+                            RecordAllActionOverrides();
+                        }
+                    })
+
+                    .OnCancel(operation =>
+                    {
+                        RebindingStopped?.Invoke();
+                        inputAction.Enable();
+
+                        operation.Dispose();
+                    })
+
+                    .Start();
+            }
         }
 
         public virtual void RecordAllActionOverrides()
@@ -139,7 +205,20 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
             if (!TryFindBindingGroup(playerInput, out var bindingGroup)) return;
             if (!TryFindBindingIndex(action, bindingGroup, out var bindingIndex)) return;
 
-            action.RemoveBindingOverride(bindingIndex);
+            if (!action.bindings[bindingIndex].isPartOfComposite)
+            {
+                action.RemoveBindingOverride(bindingIndex);
+            }
+            else
+            {
+                while (bindingIndex < action.bindings.Count)
+                {
+                    if (!action.bindings[bindingIndex].isPartOfComposite) break;
+
+                    action.RemoveBindingOverride(bindingIndex);
+                    bindingIndex++;
+                }
+            }
 
             RecordAllActionOverrides();
         }
@@ -152,7 +231,21 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
             foreach (var action in playerInput.actions)
             {
                 if (!TryFindBindingIndex(action, bindingGroup, out var bindingIndex)) continue;
-                action.RemoveBindingOverride(bindingIndex);
+                
+                if (!action.bindings[bindingIndex].isPartOfComposite)
+                {
+                    action.RemoveBindingOverride(bindingIndex);
+                }
+                else
+                {
+                    while (bindingIndex < action.bindings.Count)
+                    {
+                        if (!action.bindings[bindingIndex].isPartOfComposite) break;
+
+                        action.RemoveBindingOverride(bindingIndex);
+                        bindingIndex++;
+                    }
+                }
             }
 
             RecordAllActionOverrides();
@@ -169,7 +262,25 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
             if (!TryFindBindingGroup(playerInput, out var bindingGroup)) return FAIL_MESSAGE;
             if (!TryFindBindingIndex(action, bindingGroup, out var bindingIndex)) return FAIL_MESSAGE;
 
-            return action.bindings[bindingIndex].ToDisplayString();
+            if (!action.bindings[bindingIndex].isPartOfComposite)
+            {
+                return action.bindings[bindingIndex].ToDisplayString();
+            }
+            else
+            {
+                string result = action.bindings[bindingIndex].ToDisplayString();
+                bindingIndex++;
+
+                while (bindingIndex < action.bindings.Count)
+                {
+                    if (!action.bindings[bindingIndex].isPartOfComposite) break;
+
+                    result += $", {action.bindings[bindingIndex].ToDisplayString()}";
+                    bindingIndex++;
+                }
+
+                return result;
+            }
         }
 
         protected virtual bool TryGetPlayerInputAtIndex(int playerInputIndex, out PlayerInput playerInput)
@@ -250,11 +361,15 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
             switch (bindingGroup)
             {
                 case BindingGroupNames.KEYBOARD_AND_MOUSE: return "<Keyboard>/escape";
-                case BindingGroupNames.GAMEPAD: return "<Gamepad>/menu";
+                case BindingGroupNames.GAMEPAD: return "<Gamepad>/start";
                 default:
                     return "<Keyboard>/escape";
             }
         }
+
+        protected virtual string GetActionLabel(InputAction inputAction) => inputAction.name;
+
+        protected virtual string GetCompositeBindingLabel(InputAction inputAction, int bindingIndex) => $"{GetActionLabel(inputAction)} {inputAction.bindings[bindingIndex].name}";
 
         protected virtual void Start()
         {
@@ -283,7 +398,6 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
         private void HandleChangeRecorded(string id, object value)
         {
             if (_inputRebindsSettingDefinitionId != id) return;
-            Debug.Log($"(RebindingManager) HandleChangeRecorded({id}, {value})");
 
             if (value is not string json) return;
 
