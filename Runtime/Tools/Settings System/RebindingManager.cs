@@ -131,12 +131,31 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
 
         public virtual void RemoveBindingOverride(int playerInputIndex, InputAction inputAction)
         {
+            if (!TryGetPlayerInputAtIndex(playerInputIndex, out var playerInput)) return;
 
+            var action = playerInput.actions.FindAction(inputAction.id);
+            if (action == null) return;
+
+            if (!TryFindBindingGroup(playerInput, out var bindingGroup)) return;
+            if (!TryFindBindingIndex(action, bindingGroup, out var bindingIndex)) return;
+
+            action.RemoveBindingOverride(bindingIndex);
+
+            RecordAllActionOverrides();
         }
 
         public virtual void RemoveAllBindingOverrides(int playerInputIndex)
         {
+            if (!TryGetPlayerInputAtIndex(playerInputIndex, out var playerInput)) return;
+            if (!TryFindBindingGroup(playerInput, out var bindingGroup)) return;
 
+            foreach (var action in playerInput.actions)
+            {
+                if (!TryFindBindingIndex(action, bindingGroup, out var bindingIndex)) continue;
+                action.RemoveBindingOverride(bindingIndex);
+            }
+
+            RecordAllActionOverrides();
         }
 
         public virtual string GetActionBindingDisplayString(int playerInputIndex, InputAction inputAction)

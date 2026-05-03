@@ -1,42 +1,34 @@
 using TMPro;
-using Unity.VisualScripting.YamlDotNet.Core.Tokens;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
 {
-    [RequireComponent(typeof(Button))]
-    public class RebindActionButton : MonoBehaviour
+    public class RebindActionButton : RebindingComponent
     {
-        [SerializeField] private InputActionProperty _inputActionProperty;
+        [SerializeField] private Button _button;
         [SerializeField] private TMP_Text _display;
         [SerializeField] private TMP_Text _label;
 
-        private int _playerInputIndex = -1;
-
-        private Button _button;
-
-        public virtual void SetPlayerInputIndex(int index)
+        protected override void OnPlayerInputIndexChanged()
         {
-            _playerInputIndex = index;
-
             UpdateDisplay();
         }
 
         protected virtual void UpdateLabel()
         {
-            if (_inputActionProperty.action == null) return;
+            if (TargetAction == null) return;
 
-            SetLabel(_inputActionProperty.action.name);
+            SetLabel(TargetAction.name);
         }
 
         protected virtual void UpdateDisplay()
         {
-            if (_inputActionProperty.action == null) return;
+            if (TargetAction == null) return;
             if (RebindingManager.Instance == null) return;
 
-            SetDisplay(RebindingManager.Instance.GetActionBindingDisplayString(_playerInputIndex, _inputActionProperty.action));
+            SetDisplay(RebindingManager.Instance.GetActionBindingDisplayString(PlayerInputIndex, TargetAction));
         }
 
         protected virtual void SetLabel(string labelString)
@@ -56,7 +48,7 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
 
         protected virtual void OnEnable()
         {
-            if (TryGetComponent(out _button))
+            if (_button != null)
             {
                 _button.onClick.AddListener(HandleOnClick);
             }
@@ -82,15 +74,15 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
 
         protected virtual void HandleOnClick()
         {
-            if (_inputActionProperty == null)
+            if (TargetAction == null)
             {
-                Debug.LogError($"({nameof(RebindActionButton)}) No {nameof(_inputActionProperty)} is assigned. Select an action from a selected {nameof(InputActionAsset)}.");
+                Debug.LogError($"({nameof(RebindActionButton)}) No {nameof(TargetAction)} is assigned. Select an action from a selected {nameof(InputActionAsset)}.");
                 return;
             }
 
-            if (_playerInputIndex == -1)
+            if (PlayerInputIndex == -1)
             {
-                Debug.LogError($"({nameof(RebindActionButton)}) {nameof(_playerInputIndex)} is not initialized yet. Ensure it is set to a positive index.");
+                Debug.LogError($"({nameof(RebindActionButton)}) {nameof(PlayerInputIndex)} is not initialized yet. Ensure it is set to a positive index.");
                 return;
             }
 
@@ -100,13 +92,12 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
                 return;
             }
 
-            RebindingManager.Instance.BeginRebinding(_inputActionProperty.action, _playerInputIndex);
+            RebindingManager.Instance.BeginRebinding(TargetAction, PlayerInputIndex);
         }
 
         protected virtual void HandleOverridesChanged(int playerInputIndex)
         {
-            Debug.Log($"(RebindActionButton) HandleOverridesChanged({playerInputIndex}) @ {_inputActionProperty.action.name}");
-            if (playerInputIndex != _playerInputIndex) return;
+            if (playerInputIndex != PlayerInputIndex) return;
 
             UpdateDisplay();
         }
@@ -115,7 +106,7 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
         [ContextMenu("Print PlayerInputIndex")]
         public void PrintPlayerInputIndex()
         {
-            Debug.Log(_playerInputIndex);
+            Debug.Log(PlayerInputIndex);
         }
 #endif
     }
