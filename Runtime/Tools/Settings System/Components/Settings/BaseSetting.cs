@@ -4,9 +4,9 @@ namespace BlueMuffinGames.Tools.SettingsSystem
 {
     public abstract class BaseSetting : MonoBehaviour
     {
-        [SerializeField] private string _id;
+        [SerializeField] private BaseSettingDefinition _settingDefinition;
         
-        public string ID => _id;
+        public string ID => _settingDefinition != null ? _settingDefinition.ID : string.Empty;
 
         public virtual void Initialize() { }
 

@@ -9,7 +9,7 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
 {
     public class RebindingManager : MonoBehaviour
     {
-        [SerializeField] private string _inputRebindsSettingDefinitionId;
+        [SerializeField] private BaseSettingDefinition _inputRebindsSettingDefinition;
 
         public static RebindingManager Instance { get; private set; }
 
@@ -148,9 +148,9 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
                 return;
             }
 
-            if (string.IsNullOrEmpty(_inputRebindsSettingDefinitionId))
+            if (_inputRebindsSettingDefinition == null)
             {
-                Debug.LogError($"({nameof(RebindingManager)}) Failed to load action overrides. No {nameof(_inputRebindsSettingDefinitionId)} is specified.");
+                Debug.LogError($"({nameof(RebindingManager)}) Failed to load action overrides. No {nameof(_inputRebindsSettingDefinition)} is specified.");
                 return;
             }
 
@@ -161,21 +161,21 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
                 _inputRebinds.rebinds[playerInput.playerIndex] = playerInput.actions.SaveBindingOverridesAsJson();
             }
 
-            BaseSettingsManager.Instance.RecordChange(_inputRebindsSettingDefinitionId, JsonConvert.SerializeObject(_inputRebinds));
+            BaseSettingsManager.Instance.RecordChange(_inputRebindsSettingDefinition.ID, JsonConvert.SerializeObject(_inputRebinds));
         }
 
         public virtual void LoadAllActionOverrides(string inputRebindsJson = "")
         {
             if (BaseSettingsManager.Instance == null) return;
-            if (string.IsNullOrEmpty(_inputRebindsSettingDefinitionId))
+            if (_inputRebindsSettingDefinition == null)
             {
-                Debug.LogError($"({nameof(RebindingManager)}) Failed to load action overrides. No {nameof(_inputRebindsSettingDefinitionId)} is specified.");
+                Debug.LogError($"({nameof(RebindingManager)}) Failed to load action overrides. No {nameof(_inputRebindsSettingDefinition)} is specified.");
                 return;
             }
 
             if (string.IsNullOrEmpty(inputRebindsJson))
             {
-                BaseSettingsManager.Instance.TryGetValue(_inputRebindsSettingDefinitionId, out inputRebindsJson, onlyApplied: false);
+                BaseSettingsManager.Instance.TryGetValue(_inputRebindsSettingDefinition.ID, out inputRebindsJson, onlyApplied: false);
             }
             
             Debug.Log($"Loaded input rebinds from json: {inputRebindsJson}");
@@ -397,7 +397,7 @@ namespace BlueMuffinGames.Tools.SettingsSystem.Rebinding
 
         private void HandleChangeRecorded(string id, object value)
         {
-            if (_inputRebindsSettingDefinitionId != id) return;
+            if (_inputRebindsSettingDefinition == null || _inputRebindsSettingDefinition.ID != id) return;
 
             if (value is not string json) return;
 

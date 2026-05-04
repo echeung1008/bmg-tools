@@ -109,6 +109,14 @@ namespace BlueMuffinGames.Tools.SettingsSystem
             RecordChange(id, definition.DefaultValueObject);
         }
 
+        public virtual void ResetAllSettings()
+        {
+            foreach (var id in _registeredSettingDefinitions.Keys)
+            {
+                ResetSetting(id);
+            }
+        }
+
         public virtual void ClearAllChanges()
         {
             // reset changed values to the applied values
@@ -244,13 +252,10 @@ namespace BlueMuffinGames.Tools.SettingsSystem
             ClearAllChanges();
         }
 
-        [ContextMenu("Reset All Values")]
+        [ContextMenu("Reset All Settings")]
         private void ResetAllValues()
         {
-            foreach (var id in _registeredSettingDefinitions.Keys)
-            {
-                ResetSetting(id);
-            }
+            ResetAllSettings();
         }
         #endif
     }
