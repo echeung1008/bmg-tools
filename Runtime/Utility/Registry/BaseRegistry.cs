@@ -6,10 +6,10 @@ namespace BlueMuffinGames.Utility.Registry
 {
     public abstract class BaseRegistry : ScriptableObject
     {
-        [SerializeField] private bool _autoGenerate = true;
+        [SerializeField] protected bool _autoGenerate = true;
 
         [Header("Folders")]
-        [SerializeField] private List<Object> _folders = new();
+        [SerializeField] protected List<Object> _folders = new();
 
         public bool AutoGenerate => _autoGenerate;
 
