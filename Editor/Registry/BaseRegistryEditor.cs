@@ -2,25 +2,28 @@
 using UnityEditor;
 using UnityEngine;
 
-[CustomEditor(typeof(BaseRegistry), editorForChildClasses: true)]
-public class BaseRegistryEditor : Editor
+namespace BlueMuffinGames.Utility.Registry
 {
-    public override void OnInspectorGUI()
+    [CustomEditor(typeof(BaseRegistry), editorForChildClasses: true)]
+    public class BaseRegistryEditor : Editor
     {
-        base.OnInspectorGUI();
-
-        EditorGUILayout.Space();
-
-        var reg = target as BaseRegistry;
-
-        using (new EditorGUILayout.HorizontalScope())
+        public override void OnInspectorGUI()
         {
-            if (GUILayout.Button("Rescan"))
+            base.OnInspectorGUI();
+
+            EditorGUILayout.Space();
+
+            var reg = target as BaseRegistry;
+
+            using (new EditorGUILayout.HorizontalScope())
             {
-                reg.Rescan();
-                Debug.Log($"Rescanned {reg.name}.");
+                if (GUILayout.Button("Rescan"))
+                {
+                    reg.Rescan();
+                    Debug.Log($"Rescanned {reg.name}.");
+                }
             }
         }
     }
-}
 #endif
+}
