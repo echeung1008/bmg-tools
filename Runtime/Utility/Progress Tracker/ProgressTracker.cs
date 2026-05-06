@@ -81,16 +81,16 @@ namespace BlueMuffinGames.Utility
         /// <param name="enumerable"></param>
         /// <param name="iteration"></param>
         /// <returns></returns>
-        public Task AwaitableTrackedForLoop<T>(IEnumerable<T> enumerable, Action<int, T> iteration)
+        public async Task AwaitableTrackedForLoop<T>(IEnumerable<T> enumerable, Action<int, T> iteration)
         {
             int count = enumerable.Count();
             for (int i = 0; i < count; i++)
             {
                 iteration(i, enumerable.ElementAt(i));
                 Progress = (float)(i + 1) / count;
+                await Awaitable.NextFrameAsync();
             }
             Progress = 1;
-            return Task.CompletedTask;
         }
 
         /// <summary>
@@ -102,7 +102,7 @@ namespace BlueMuffinGames.Utility
         /// <param name="inner"></param>
         /// <param name="iteration"></param>
         /// <returns></returns>
-        public Task AwaitableTrackedPartitionedLoop<T>(IEnumerable<T> enumerable, int outer, int inner, Action<int, int, T> iteration)
+        public async Task AwaitableTrackedPartitionedLoop<T>(IEnumerable<T> enumerable, int outer, int inner, Action<int, int, T> iteration)
         {
             int count = enumerable.Count();
             for (int i = 0; i < outer; i++)
@@ -112,10 +112,10 @@ namespace BlueMuffinGames.Utility
                     int index = i * outer + j;
                     iteration(i, j, enumerable.ElementAt(index));
                     Progress = (float)(index + 1) / count;
+                    await Awaitable.NextFrameAsync();
                 }
             }
             Progress = 1;
-            return Task.CompletedTask;
         }
 
         /// <summary>
@@ -127,7 +127,7 @@ namespace BlueMuffinGames.Utility
         /// <param name="getInner"></param>
         /// <param name="iteration"></param>
         /// <returns></returns>
-        public Task AwaitableTrackedNestedLoop<TOuter, TInner>(IEnumerable<TOuter> outerEnumerable, Func<TOuter, IEnumerable<TInner>> getInner, Action<int, int, TOuter, TInner> iteration)
+        public async Task AwaitableTrackedNestedLoop<TOuter, TInner>(IEnumerable<TOuter> outerEnumerable, Func<TOuter, IEnumerable<TInner>> getInner, Action<int, int, TOuter, TInner> iteration)
         {
             int count = 0;
             foreach (TOuter outer in outerEnumerable)
@@ -150,12 +150,12 @@ namespace BlueMuffinGames.Utility
                     innerIndex++;
                     index++;
                     Progress = (float)(index + 1) / count;
+                    await Awaitable.NextFrameAsync();
                 }
                 outerIndex++;
             }
 
             Progress = 1;
-            return Task.CompletedTask;
         }
 
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
