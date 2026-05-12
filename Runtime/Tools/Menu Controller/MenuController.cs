@@ -10,10 +10,12 @@ namespace BlueMuffinGames.Tools.MenuController
         [SerializeField] private bool _showFirstPageOnStart;
         [SerializeField] private bool _allowExternalPages;
 
-        private List<MenuPage> _pages = new();
-        private Stack<MenuPage> _navigationStack = new();
-
         public event Action onStackEmptied = delegate { };
+
+        public IReadOnlyDictionary<string, MenuPage> PageRegistry => _pageRegistry;
+
+        private Dictionary<string, MenuPage> _pageRegistry = new();
+        private Stack<MenuPage> _navigationStack = new();
 
         /// <summary>
         /// Push (show) a new page. Starts after hiding the current page, if any.
@@ -23,7 +25,7 @@ namespace BlueMuffinGames.Tools.MenuController
         /// <param name="onShowComplete">Invoked when the new page is shown.</param>
         public virtual void PushPage(MenuPage page, Action onHideComplete = null, Action onShowComplete = null, params object[] args)
         {
-            if (!_allowExternalPages && !_pages.Contains(page)) return;
+            if (!_allowExternalPages && !_pageRegistry.ContainsKey(page.name)) return;
 
             if (_navigationStack.TryPeek(out MenuPage currentPage)) currentPage.Hide(() =>
             {
@@ -40,12 +42,13 @@ namespace BlueMuffinGames.Tools.MenuController
         }
         public void PushPage(string pageName, Action onHideComplete = null, Action onShowComplete = null, params object[] args)
         {
-            var filtered = _pages.Where(p => p.name == pageName).ToList();
-            if (filtered.Count > 0) PushPage(filtered.First(), onHideComplete, onShowComplete, args);
-            else Debug.LogWarning($"[MenuController] Page {pageName} not found in pages.");
+            if (!_pageRegistry.TryGetValue(pageName, out MenuPage page))
+            {
+                Debug.LogWarning($"[MenuController] Page {pageName} not found in pages.");
+                return;
+            }
+            PushPage(page, onHideComplete, onShowComplete, args);
         }
-        public void PushPage(string pageName) => PushPage(pageName, null, null);
-        public void PushPage(MenuPage page) => PushPage(page, null, null);
 
         /// <summary>
         /// Pop (hide) the current page. Starts showing the previous page after hiding, if any.
@@ -67,7 +70,6 @@ namespace BlueMuffinGames.Tools.MenuController
             
             return result;
         }
-        public void PopPage() => PopPage(null, null);
 
         private void Awake()
         {
@@ -75,21 +77,27 @@ namespace BlueMuffinGames.Tools.MenuController
             {
                 if (child.TryGetComponent(out MenuPage menuPage))
                 {
-                    _pages.Add(menuPage);
+                    if (_pageRegistry.ContainsKey(menuPage.name))
+                    {
+                        Debug.LogWarning($"The page registry already contains a page with the name {menuPage.name}.");
+                        continue;
+                    }
+
+                    _pageRegistry[menuPage.name] = menuPage;
                 }
             }
         }
 
         private void Start()
         {
-            foreach(MenuPage page in _pages)
+            foreach(MenuPage page in _pageRegistry.Values)
             {
                 page.Initialize();
             }
 
-            if (_showFirstPageOnStart && _pages.Count > 0)
+            if (_showFirstPageOnStart && _pageRegistry.Count > 0)
             {
-                PushPage(_pages.First());
+                PushPage(_pageRegistry.Values.First());
             }
         }
     }
