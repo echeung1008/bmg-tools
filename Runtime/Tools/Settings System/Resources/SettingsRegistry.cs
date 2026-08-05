@@ -1,5 +1,6 @@
 using BlueMuffinGames.Utility.Registry;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace BlueMuffinGames.Tools.SettingsSystem
@@ -11,9 +12,13 @@ namespace BlueMuffinGames.Tools.SettingsSystem
 
         public IReadOnlyList<BaseSettingDefinition> SettingDefinitions => _settingDefinitions;
 
-        protected override void ProcessFolders(string[] folderPaths)
+        protected override void ProcessFolders(string[] folderPaths, out bool changed)
         {
-            _settingDefinitions = FindScriptableObjects<BaseSettingDefinition>(folderPaths);
+            var newSettingDefinitions = FindScriptableObjects<BaseSettingDefinition>(folderPaths);
+
+            changed = !newSettingDefinitions.SequenceEqual(_settingDefinitions);
+
+            _settingDefinitions = newSettingDefinitions;
         }
     }
 }

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
@@ -6,10 +7,12 @@ namespace BlueMuffinGames.Utility.Registry
 {
     public abstract class BaseRegistry : ScriptableObject
     {
+        public static Func<bool> CanSaveAssets { get; set; } = () => true;
+
         [SerializeField] protected bool _autoGenerate = true;
 
         [Header("Folders")]
-        [SerializeField] protected List<Object> _folders = new();
+        [SerializeField] protected List<UnityEngine.Object> _folders = new();
 
         public bool AutoGenerate => _autoGenerate;
 
@@ -18,13 +21,15 @@ namespace BlueMuffinGames.Utility.Registry
         {
             var folderPaths = ResolveFolderPaths(_folders);
 
-            ProcessFolders(folderPaths);
+            ProcessFolders(folderPaths, out var changed);
+
+            if (!changed || !CanSaveAssets()) return;
 
             EditorUtility.SetDirty(this);
             AssetDatabase.SaveAssets();
         }
 
-        protected abstract void ProcessFolders(string[] folderPaths);
+        protected abstract void ProcessFolders(string[] folderPaths, out bool changed);
 
         protected static List<GameObject> FindPrefabsWithComponent<T>(string[] folderPaths)
         {
@@ -70,7 +75,7 @@ namespace BlueMuffinGames.Utility.Registry
             return results;
         }
 
-        private static string[] ResolveFolderPaths(List<Object> folderObjects)
+        private static string[] ResolveFolderPaths(List<UnityEngine.Object> folderObjects)
         {
             var paths = new List<string>(folderObjects.Count);
 
